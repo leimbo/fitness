@@ -1,0 +1,93 @@
+{
+  "athlete": {
+    "id": 199182,
+    "username": "leimbach",
+    "resource_state": 2,
+    "firstname": "Owen",
+    "lastname": "Leimbach",
+    "bio": "",
+    "city": "Bentonville",
+    "state": "Arkansas",
+    "country": "United States",
+    "sex": "M",
+    "premium": true,
+    "summit": true,
+    "created_at": "2012-01-04T04:31:08Z",
+    "updated_at": "2025-02-27T20:10:12Z",
+    "badge_type_id": 1,
+    "profile_medium": "https://dgalywyr863hv.cloudfront.net/pictures/athletes/199182/11686134/1/medium.jpg",
+    "profile": "https://dgalywyr863hv.cloudfront.net/pictures/athletes/199182/11686134/1/large.jpg",
+    "friend": null,
+    "follower": null
+  },
+  "stats": {
+    "biggest_ride_distance": 192506.0,
+    "biggest_climb_elevation_gain": 6952.8,
+    "recent_ride_totals": {
+      "count": 3,
+      "distance": 102967.40000000001,
+      "moving_time": 15390,
+      "elapsed_time": 15967,
+      "elevation_gain": 1127.0,
+      "achievement_count": 0
+    },
+    "all_ride_totals": {
+      "count": 1210,
+      "distance": 46242746.20000002,
+      "moving_time": 6632527,
+      "elapsed_time": 7971391,
+      "elevation_gain": 532823.3
+    },
+    "recent_run_totals": {
+      "count": 12,
+      "distance": 137205.8,
+      "moving_time": 43512,
+      "elapsed_time": 44869,
+      "elevation_gain": 1187.0,
+      "achievement_count": 0
+    },
+    "all_run_totals": {
+      "count": 933,
+      "distance": 8810920.799999999,
+      "moving_time": 2913627,
+      "elapsed_time": 3105597,
+      "elevation_gain": 77702.90000000007
+    },
+    "recent_swim_totals": {
+      "count": 4,
+      "distance": 9006.8,
+      "moving_time": 11656,
+      "elapsed_time": 11865,
+      "elevation_gain": 0.0,
+      "achievement_count": 0
+    },
+    "all_swim_totals": {
+      "count": 541,
+      "distance": 1296704.3000000012,
+      "moving_time": 1566837,
+      "elapsed_time": 1624400,
+      "elevation_gain": 2611.6
+    },
+    "ytd_ride_totals": {
+      "count": 8,
+      "distance": 286415,
+      "moving_time": 42552.0,
+      "elapsed_time": 43359.0,
+      "elevation_gain": 3060.4
+    },
+    "ytd_run_totals": {
+      "count": 36,
+      "distance": 374637,
+      "moving_time": 123065.0,
+      "elapsed_time": 126217.0,
+      "elevation_gain": 2543.0
+    },
+    "ytd_swim_totals": {
+      "count": 11,
+      "distance": 20940,
+      "moving_time": 26424.0,
+      "elapsed_time": 27411.0,
+      "elevation_gain": 0.0
+    }
+  }
+}

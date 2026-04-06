@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "intervals-icu": {
+      "command": "npx",
+      "args": ["-y", "intervals-icu-mcp"],
+      "env": {
+        "PATH": "/usr/local/bin:/usr/bin:/bin",
+        "INTERVALS_ATHLETE_ID": "i547993",
+        "INTERVALS_API_KEY": "58wvl8i1zhrlk0c9p83wbvks3",
+        "TRANSPORT": "stdio"
+      }
+    }
+  }
+}

@@ -1,0 +1,50 @@
+
+# Credentials & secrets
+.credentials/
+import-scripts/garmin.json
+import-scripts/strava.json
+*.json.bak
+
+# Environment
+.env
+.env.local
+
+# macOS
+.DS_Store
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+venv/
+env/
+
+# Editors
+.vscode/
+.idea/
+
+# Logs
+*.log
+logs/
+
+# Cache
+.cache/
+
+# Historical Garmin data export (large, not needed for MCP server)
+data/garmin/DI_CONNECT/
+data/garmin/DI_CONNECT_IQ/
+data/garmin/DI_LIVETRACK/
+data/garmin/INREACH/
+data/garmin/IT_CONSENT_HISTORY/
+data/garmin/IT_DEVICE_AND_CONTENT/
+data/garmin/IT_GLOBAL_EVENT/
+data/garmin/customer_data/
+
+# Binary / office files
+*.xlsx
+*.zip
+
+# Skill files (Claude Code internal)
+*.skill
