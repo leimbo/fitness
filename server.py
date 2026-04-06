@@ -31,6 +31,8 @@ SCRIPTS_DIR = Path(os.environ.get("SCRIPTS_DIR", "./import-scripts"))
 CREDS_DIR   = Path(os.environ.get("CREDS_DIR",   "./.credentials"))
 
 mcp = FastMCP("health-fitness")
+mcp.settings.host = "0.0.0.0"
+mcp.settings.port = int(os.environ.get("PORT", "8080"))
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
