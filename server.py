@@ -33,7 +33,7 @@ CREDS_DIR   = Path(os.environ.get("CREDS_DIR",   "./.credentials"))
 mcp = FastMCP("health-fitness")
 mcp.settings.host = "0.0.0.0"
 mcp.settings.port = int(os.environ.get("PORT", "8080"))
-
+mcp.settings.allowed_hosts = ["fitness-mcp.fly.dev", "localhost", "127.0.0.1"]
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 def load_json(path: Path) -> Any:
@@ -309,4 +309,4 @@ def trigger_sync() -> str:
 
 # ── Run ───────────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
-    mcp.run(transport="sse")
+    mcp.run(transport="streamable-http")
