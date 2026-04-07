@@ -13,12 +13,20 @@ Tools:
   list_workouts       — available workout templates
   push_workout        — push a workout to Garmin Connect
   trigger_sync        — pull fresh data from Garmin/Strava/Calendar
+  create_events       — create/update Intervals.icu calendar events (workouts, notes, races)
+  delete_events       — delete Intervals.icu calendar events by id or external_id
+  update_event        — update a single Intervals.icu event
+  update_wellness     — push wellness data (weight, HRV, steps, etc.) to Intervals.icu
+  get_wellness        — read wellness data for a date range from Intervals.icu
 """
 
+import base64
 import json
 import os
 import subprocess
 import sys
+import urllib.error
+import urllib.request
 from datetime import date, timedelta
 from pathlib import Path
 from typing import Any
@@ -29,6 +37,10 @@ from mcp.server.fastmcp import FastMCP
 DATA_DIR    = Path(os.environ.get("DATA_DIR",    "./data"))
 SCRIPTS_DIR = Path(os.environ.get("SCRIPTS_DIR", "./import-scripts"))
 CREDS_DIR   = Path(os.environ.get("CREDS_DIR",   "./.credentials"))
+
+ICU_ATHLETE_ID = os.environ.get("ICU_ATHLETE_ID", "i547993")
+ICU_API_KEY    = os.environ.get("ICU_API_KEY", "")
+ICU_BASE       = "https://intervals.icu/api/v1"
 
 mcp = FastMCP("health-fitness")
 mcp.settings.host = "0.0.0.0"
@@ -55,6 +67,31 @@ def fmt_duration(seconds: float) -> str:
     m = int((seconds % 3600) // 60)
     s = int(seconds % 60)
     return f"{h}h {m:02d}m" if h else f"{m}m {s:02d}s"
+
+
+def _icu_auth_header() -> str:
+    token = base64.b64encode(f"API_KEY:{ICU_API_KEY}".encode()).decode()
+    return f"Basic {token}"
+
+
+def _icu_request(method: str, path: str, body: Any = None) -> Any:
+    """Make an authenticated request to the Intervals.icu API."""
+    url = f"{ICU_BASE}/athlete/{ICU_ATHLETE_ID}/{path}"
+    data = json.dumps(body).encode() if body is not None else None
+    req = urllib.request.Request(
+        url, data=data, method=method,
+        headers={
+            "Authorization": _icu_auth_header(),
+            "Content-Type": "application/json",
+        }
+    )
+    try:
+        with urllib.request.urlopen(req) as resp:
+            resp_body = resp.read().decode()
+            return json.loads(resp_body) if resp_body.strip() else {}
+    except urllib.error.HTTPError as e:
+        err_body = e.read().decode()
+        raise RuntimeError(f"HTTP {e.code}: {err_body}") from e
 
 
 # ── Tools ─────────────────────────────────────────────────────────────────────
@@ -305,6 +342,210 @@ def trigger_sync() -> str:
             results.append(f"     {r.stderr[:300]}")
 
     return "\n".join(results)
+
+
+# ── Intervals.icu write/read tools ────────────────────────────────────────────
+
+@mcp.tool()
+def create_events(events: list) -> str:
+    """Create or update calendar events on Intervals.icu (workouts, notes, races).
+
+    Uses upsert — if an event with the same external_id already exists it is updated,
+    otherwise a new event is created. Workouts auto-sync to Garmin Connect if
+    icu_garmin_upload_workouts is enabled on the account.
+
+    Args:
+        events: List of event objects. Each object must have:
+            - category (str): WORKOUT, NOTE, RACE, or TARGET
+            - start_date_local (str): ISO datetime e.g. "2026-04-08T00:00:00"
+            - name (str): Display name on calendar
+            - type (str): Activity type for WORKUTs — Run, Ride, WeightTraining,
+              Swim, TrailRun, VirtualRide, etc.
+            - description (str, optional): Workout text syntax for structured
+              workouts e.g. "- 10m Z2\\n- 5x 3m Z4 1m Z1\\n- 5m Z1"
+            - moving_time (int, optional): Duration in seconds
+            - external_id (str, optional): Unique key for upsert; use "claude-"
+              prefix to identify Claude-created events
+            - color (str, optional): For notes — red, orange, yellow, green,
+              blue, purple, gray
+    """
+    if not ICU_API_KEY:
+        return "Error: ICU_API_KEY environment variable not set."
+    if not events:
+        return "Error: events list is empty."
+
+    try:
+        result = _icu_request("POST", "events/bulk?upsert=true", events)
+    except RuntimeError as e:
+        return f"Error creating events: {e}"
+
+    if not isinstance(result, list):
+        return f"Unexpected response: {result}"
+
+    lines = [f"## Created/Updated {len(result)} event(s)"]
+    for ev in result:
+        ev_id    = ev.get("id", "?")
+        name     = ev.get("name", "Untitled")
+        date_str = (ev.get("start_date_local") or "")[:10]
+        category = ev.get("category", "")
+        ext_id   = ev.get("external_id", "")
+        line = f"- **{date_str}** [{ev_id}] {name} ({category})"
+        if ext_id:
+            line += f" — `{ext_id}`"
+        lines.append(line)
+
+    return "\n".join(lines)
+
+
+@mcp.tool()
+def delete_events(events: list) -> str:
+    """Delete Intervals.icu calendar events by id or external_id.
+
+    Args:
+        events: List of objects, each with either:
+            - external_id (str): The external_id used when creating the event
+            - id (int): The Intervals.icu numeric event id
+    """
+    if not ICU_API_KEY:
+        return "Error: ICU_API_KEY environment variable not set."
+    if not events:
+        return "Error: events list is empty."
+
+    try:
+        result = _icu_request("PUT", "events/bulk-delete", events)
+    except RuntimeError as e:
+        return f"Error deleting events: {e}"
+
+    count = result.get("count", result) if isinstance(result, dict) else result
+    return f"Deleted {count} event(s)."
+
+
+@mcp.tool()
+def update_event(
+    event_id: int,
+    name: str = None,
+    description: str = None,
+    start_date_local: str = None,
+    type: str = None,
+    category: str = None,
+    moving_time: int = None,
+    color: str = None,
+) -> str:
+    """Update a single existing Intervals.icu calendar event (partial update).
+
+    Only the fields you provide will be changed. Useful for rescheduling,
+    renaming, or changing workout details without recreating the event.
+
+    Args:
+        event_id: Numeric Intervals.icu event id (required).
+        name: New display name.
+        description: New workout description (Intervals.icu text syntax).
+        start_date_local: New date/time e.g. "2026-04-09T00:00:00".
+        type: Activity type e.g. Run, Ride, WeightTraining.
+        category: WORKOUT, NOTE, RACE, or TARGET.
+        moving_time: Duration in seconds.
+        color: For notes — red, orange, yellow, green, blue, purple, gray.
+    """
+    if not ICU_API_KEY:
+        return "Error: ICU_API_KEY environment variable not set."
+
+    payload: dict[str, Any] = {}
+    if name             is not None: payload["name"]             = name
+    if description      is not None: payload["description"]      = description
+    if start_date_local is not None: payload["start_date_local"] = start_date_local
+    if type             is not None: payload["type"]             = type
+    if category         is not None: payload["category"]         = category
+    if moving_time      is not None: payload["moving_time"]      = moving_time
+    if color            is not None: payload["color"]            = color
+
+    if not payload:
+        return "Error: no fields provided to update."
+
+    try:
+        result = _icu_request("PUT", f"events/{event_id}", payload)
+    except RuntimeError as e:
+        return f"Error updating event {event_id}: {e}"
+
+    updated_name = result.get("name", "?")
+    updated_date = (result.get("start_date_local") or "")[:10]
+    return f"Updated event {event_id}: **{updated_name}** on {updated_date}."
+
+
+@mcp.tool()
+def update_wellness(data: list) -> str:
+    """Push wellness data (weight, HRV, sleep, steps, etc.) to Intervals.icu.
+
+    Args:
+        data: List of daily wellness objects. Each must have:
+            - id (str): ISO date e.g. "2026-04-06" (required)
+            - weight (float, optional): Body weight in kg
+            - restingHR (int, optional): Resting heart rate in bpm
+            - hrv (float, optional): HRV in ms
+            - hrvSDNN (float, optional): HRV SDNN
+            - sleepSecs (int, optional): Total sleep in seconds
+            - sleepScore (int, optional): Sleep quality score 0–100
+            - steps (int, optional): Step count
+            - calories (int, optional): Total calories
+            - spO2 (float, optional): Blood oxygen %
+            - respiration (float, optional): Breaths per minute
+    """
+    if not ICU_API_KEY:
+        return "Error: ICU_API_KEY environment variable not set."
+    if not data:
+        return "Error: data list is empty."
+
+    try:
+        result = _icu_request("PUT", "wellness-bulk", data)
+    except RuntimeError as e:
+        return f"Error updating wellness: {e}"
+
+    if isinstance(result, list):
+        dates = [r.get("id", "?") for r in result]
+        return f"Updated wellness for {len(result)} day(s): {', '.join(dates)}."
+    return f"Wellness updated: {result}"
+
+
+@mcp.tool()
+def get_wellness(oldest: str, newest: str) -> str:
+    """Get wellness data from Intervals.icu for a date range.
+
+    Args:
+        oldest: Start date in YYYY-MM-DD format (inclusive).
+        newest: End date in YYYY-MM-DD format (inclusive).
+    """
+    if not ICU_API_KEY:
+        return "Error: ICU_API_KEY environment variable not set."
+
+    try:
+        result = _icu_request("GET", f"wellness?oldest={oldest}&newest={newest}")
+    except RuntimeError as e:
+        return f"Error fetching wellness: {e}"
+
+    if not result:
+        return f"No wellness data found between {oldest} and {newest}."
+
+    entries = result if isinstance(result, list) else [result]
+    lines = [f"## Wellness — {oldest} to {newest}"]
+    for entry in entries:
+        d      = entry.get("id", "?")
+        weight = entry.get("weight")
+        hrv    = entry.get("hrv")
+        rhr    = entry.get("restingHR")
+        sleep  = entry.get("sleepSecs")
+        score  = entry.get("sleepScore")
+        steps  = entry.get("steps")
+
+        parts = []
+        if weight  is not None: parts.append(f"weight={weight}kg")
+        if rhr     is not None: parts.append(f"rHR={rhr}bpm")
+        if hrv     is not None: parts.append(f"HRV={hrv}ms")
+        if sleep   is not None: parts.append(f"sleep={int(sleep)//3600}h{(int(sleep)%3600)//60}m")
+        if score   is not None: parts.append(f"sleepScore={score}")
+        if steps   is not None: parts.append(f"steps={steps}")
+
+        lines.append(f"- **{d}**: {', '.join(parts) if parts else '(no data)'}")
+
+    return "\n".join(lines)
 
 
 # ── Run ───────────────────────────────────────────────────────────────────────
